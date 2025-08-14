@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Automatic Fan On/Off Demo</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#22c55e;--muted:#94a3b8}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial; margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg,#021026,#061028); color:#e6eef8}
+    .wrap{width:960px; max-width:95%; background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent); border-radius:12px; padding:20px; box-shadow:0 8px 30px rgba(2,6,23,0.6); display:grid; grid-template-columns:360px 1fr; gap:18px}
+    .panel{background:rgba(255,255,255,0.02); border-radius:10px; padding:18px}
+
+    .status{display:flex; gap:12px; align-items:center}
+    .meter{width:120px; height:120px; border-radius:50%; background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.03), transparent 30%); display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700}
+    .temp-large{font-size:34px}
+    .muted{color:var(--muted); font-size:14px}
+
+    .controls{display:flex; flex-direction:column; gap:12px}
+    .row{display:flex; gap:12px; align-items:center}
+    label{font-size:14px}
+    input[type=range]{width:100%}
+    .btn{background:transparent; border:1px solid rgba(255,255,255,0.06); color:inherit; padding:10px 14px; border-radius:8px; cursor:pointer}
+    .btn.primary{border-color:var(--accent); box-shadow:0 6px 18px rgba(34,197,94,0.08)}
+
+    /* Fan visual */
+    .fan-wrap{display:flex; align-items:center; justify-content:center; height:100%;}
+    .fan{width:220px; height:220px; border-radius:50%; display:grid; place-items:center; position:relative}
+    .fan .hub{width:40px; height:40px; border-radius:50%; background:linear-gradient(180deg,#cbd5e1,#64748b); z-index:2}
+    .blade{width:140px; height:60px; border-radius:40px; position:absolute; left:50%; top:50%; transform-origin:0% 50%; background:linear-gradient(90deg, rgba(255,255,255,0.06), rgba(0,0,0,0.15)); opacity:0.95}
+    .blade.b1{transform:translate(-10%, -50%) rotate(0deg)}
+    .blade.b2{transform:translate(-10%, -50%) rotate(120deg)}
+    .blade.b3{transform:translate(-10%, -50%) rotate(240deg)}
+
+    .spin{animation:spin 0.9s linear infinite}
+    @keyframes spin{from{transform:translate(-10%,-50%) rotate(0deg)} to{transform:translate(-10%,-50%) rotate(360deg)}}
+
+    .small{font-size:13px}
+    .footer{margin-top:10px;color:var(--muted); font-size:13px}
+
+    /* responsive */
+    @media (max-width:720px){.wrap{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h2>Automatic Fan On/Off — Demo</h2>
+      <p class="muted">This demo simulates a temperature sensor and an automatic fan controller. Use the slider to change temperature or enable auto mode to let the controller decide.</p>
+
+      <div class="status" style="margin-top:16px">
+        <div class="meter">
+          <div>
+            <div class="temp-large" id="tempDisplay">--°C</div>
+            <div class="small muted">Ambient</div>
+          </div>
+        </div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div class="small muted">Fan State</div>
+              <div id="fanState" style="font-weight:700;font-size:18px">OFF</div>
+            </div>
+            <div style="text-align:right">
+              <div class="small muted">Mode</div>
+              <div id="modeLabel">Manual</div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px" class="controls">
+            <div>
+              <label for="tempRange">Simulated Temperature: <span id="simTempLabel">25</span>°C</label>
+              <input id="tempRange" type="range" min="0" max="60" value="25">
+            </div>
+
+            <div class="row">
+              <button id="autoBtn" class="btn">Enable Auto Mode</button>
+              <button id="manualBtn" class="btn">Manual Mode</button>
+              <button id="toggleFan" class="btn primary">Toggle Fan</button>
+            </div>
+
+            <div style="display:flex; gap:8px; align-items:center">
+              <label>Turn ON above</label>
+              <input id="onThreshold" type="number" value="28" min="0" max="60" style="width:76px;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06)">
+              <label>Turn OFF below</label>
+              <input id="offThreshold" type="number" value="25" min="0" max="60" style="width:76px;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06)">
+            </div>
+
+            <div class="footer">Simulation updates every second. Auto mode: controller will turn fan on when temperature >= ON threshold and turn it off when temperature &lt;= OFF threshold.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel fan-wrap">
+      <div style="width:100%">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="margin:0">Fan Visual</h3>
+          <div class="small muted">Speed: <span id="speedLabel">0</span> RPM</div>
+        </div>
+
+        <div class="fan" id="fanGraphic" aria-hidden="true">
+          <div class="blade b1" id="blade1"></div>
+          <div class="blade b2" id="blade2"></div>
+          <div class="blade b3" id="blade3"></div>
+          <div class="hub"></div>
+        </div>
+
+        <div style="margin-top:14px;color:var(--muted);font-size:13px">Logs:</div>
+        <pre id="log" style="height:120px; overflow:auto; background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; margin-top:8px; color:#cfe9d4">Controller started...</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // DOM elements
+    const tempRange = document.getElementById('tempRange');
+    const simTempLabel = document.getElementById('simTempLabel');
+    const tempDisplay = document.getElementById('tempDisplay');
+    const fanStateEl = document.getElementById('fanState');
+    const fanGraphic = document.getElementById('fanGraphic');
+    const bladeEls = [document.getElementById('blade1'), document.getElementById('blade2'), document.getElementById('blade3')];
+    const autoBtn = document.getElementById('autoBtn');
+    const manualBtn = document.getElementById('manualBtn');
+    const toggleFanBtn = document.getElementById('toggleFan');
+    const onThresholdInput = document.getElementById('onThreshold');
+    const offThresholdInput = document.getElementById('offThreshold');
+    const modeLabel = document.getElementById('modeLabel');
+    const speedLabel = document.getElementById('speedLabel');
+    const logEl = document.getElementById('log');
+
+    // State
+    let temperature = Number(tempRange.value);
+    let fanOn = false;
+    let autoMode = false;
+    let simulationInterval = null;
+
+    function log(msg){
+      const t = new Date().toLocaleTimeString();
+      logEl.textContent = `[${t}] ${msg}\n` + logEl.textContent;
+    }
+
+    function updateUI(){
+      simTempLabel.textContent = temperature.toFixed(1);
+      tempDisplay.textContent = temperature.toFixed(1) + '°C';
+      fanStateEl.textContent = fanOn ? 'ON' : 'OFF';
+      modeLabel.textContent = autoMode ? 'Auto' : 'Manual';
+      // visual fan speed mapping
+      const speed = fanOn ? Math.min(Math.round((temperature - Number(offThresholdInput.value || 0)) * 50 + 200), 1600) : 0;
+      speedLabel.textContent = speed;
+      // set spin speed by adjusting animation-duration (faster -> shorter duration)
+      if(fanOn){
+        const duration = Math.max(0.18, 2 - (speed / 1000)); // clamp
+        bladeEls.forEach(b => b.style.animationDuration = duration + 's');
+        bladeEls.forEach(b => b.classList.add('spin'));
+        fanGraphic.style.opacity = 1;
+      } else {
+        bladeEls.forEach(b => { b.classList.remove('spin'); b.style.animationDuration = ''; });
+        fanGraphic.style.opacity = 0.9;
+      }
+    }
+
+    function readSensor(){
+      // in a real project you'd fetch from a sensor; here we simply use the simulated value
+      return temperature;
+    }
+
+    function controllerStep(){
+      const t = readSensor();
+      const onThreshold = Number(onThresholdInput.value);
+      const offThreshold = Number(offThresholdInput.value);
+
+      if(autoMode){
+        if(!fanOn && t >= onThreshold){
+          fanOn = true; log(`Temp ${t.toFixed(1)}°C >= ${onThreshold}°C -> FAN ON`);
+        } else if(fanOn && t <= offThreshold){
+          fanOn = false; log(`Temp ${t.toFixed(1)}°C <= ${offThreshold}°C -> FAN OFF`);
+        }
+      }
+
+      updateUI();
+    }
+
+    // Simulation: we can slowly drift temperature towards the slider value
+    function startSimulation(){
+      if(simulationInterval) return;
+      simulationInterval = setInterval(()=>{
+        // Here we could add noise or model a room heating/cooling effect
+        // We'll make a small random walk towards the slider target
+        const target = Number(tempRange.value);
+        // move temperature fractional towards target
+        temperature += (target - temperature) * 0.12 + (Math.random()-0.5) * 0.2;
+        // clamp
+        temperature = Math.max(0, Math.min(60, temperature));
+        controllerStep();
+      }, 1000);
+      log('Simulation started');
+    }
+
+    function stopSimulation(){
+      if(simulationInterval){ clearInterval(simulationInterval); simulationInterval = null; log('Simulation stopped'); }
+    }
+
+    // Event hooks
+    tempRange.addEventListener('input', ()=>{
+      // immediate reflect the slider but the simulated temperature will approach it
+      simTempLabel.textContent = tempRange.value;
+    });
+
+    autoBtn.addEventListener('click', ()=>{
+      autoMode = true; modeLabel.textContent = 'Auto'; log('Auto mode enabled'); updateUI();
+    });
+    manualBtn.addEventListener('click', ()=>{
+      autoMode = false; modeLabel.textContent = 'Manual'; log('Manual mode enabled'); updateUI();
+    });
+
+    toggleFanBtn.addEventListener('click', ()=>{
+      if(autoMode){ log('Toggle not allowed in auto mode — switch to manual to toggle manually'); return; }
+      fanOn = !fanOn; log('Manual toggle -> ' + (fanOn ? 'ON' : 'OFF')); updateUI();
+    });
+
+    onThresholdInput.addEventListener('change', ()=>{ log('ON threshold set to ' + onThresholdInput.value + '°C'); controllerStep(); });
+    offThresholdInput.addEventListener('change', ()=>{ log('OFF threshold set to ' + offThresholdInput.value + '°C'); controllerStep(); });
+
+    // start
+    updateUI();
+    startSimulation();
+
+    // expose for debugging in browser console
+    window._demo = {startSimulation, stopSimulation, setTemp: v => { tempRange.value = v; temperature = Number(v); updateUI(); }};
+  </script>
+</body>
+</html>
